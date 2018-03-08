@@ -1,0 +1,78 @@
+crypto ipsec transform-set ipsec-prop-${local.suffix} esp-aes esp-sha-hmac
+  mode tunnel
+exit
+!
+crypto keyring keyring-${local.suffix}
+  local-address ${local.vpn_peer}
+  pre-shared-key address ${local.vpn_local} key ${local.shared_secret}
+exit
+!
+crypto isakmp profile isakmp-${local.suffix}
+  keyring keyring-${local.suffix}
+  match identity address ${local.vpn_local} 255.255.255.255
+  local-address ${local.vpn_peer}
+exit
+!
+crypto ipsec profile ipsec-${local.suffix}
+  set isakmp-profile isakmp-${local.suffix}
+  set transform-set ipsec-prop-${local.suffix}
+  set pfs group2
+exit
+!
+! Adapt your interface number here. Take care not to override an existing one.
+interface TunnelX
+  description IPsec tunnel to GCP ${local.suffix}
+  ip vrf forwarding VRF-PRIV
+  ip address ${local.bgp_peer_ip} 255.255.255.252
+  ip virtual-reassembly
+  ip tcp adjust-mss 1379
+  tunnel source ${local.vpn_peer}
+  tunnel destination ${local.vpn_local}
+  tunnel mode ipsec ipv4
+  tunnel protection ipsec profile ipsec-${local.suffix}
+exit
+EOF
+}
+
+
+no interface {{ iface }}
+no crypto ipsec profile ipsec-{{ project_name }}-{{ old_project_id }}-0
+no crypto ipsec transform-set ipsec-prop-{{ project_name }}-{{ old_project_id }}-0
+no crypto isakmp profile isakmp-{{ project_name }}-{{ old_project_id }}-0
+no crypto keyring keyring-{{ project_name }}-{{ old_project_id }}-0
+
+ip prefix-list PL-AS{{ bgp_local_asn }}-IN seq 5 permit {{ ip_cidr_range }} le 32
+ip prefix-list PL-AS{{ bgp_local_asn }}-OUT seq 5 permit 10.0.0.0/8 le 32
+ip prefix-list PL-AS{{ bgp_local_asn }}-OUT seq 10 permit 172.16.0.0/12 le 32
+ip prefix-list PL-AS{{ bgp_local_asn }}-OUT seq 15 permit 192.168.0.0/16 le 32
+!
+router bgp {{ bgp_peer_asn }}
+  address-family ipv4 vrf VRF-PRIV
+    neighbor {{ bgp_local_ip }} remote-as {{ bgp_local_asn }}
+    neighbor {{ bgp_local_ip }} description GCP {{ project_name }}-{{ project_id }}-0
+    neighbor {{ bgp_local_ip }} soft-reconfiguration inbound
+    neighbor {{ bgp_local_ip }} prefix-list PL-AS{{ bgp_local_asn }}-IN in
+    neighbor {{ bgp_local_ip }} prefix-list PL-AS{{ bgp_local_asn }}-OUT out
+    neighbor {{ bgp_local_ip }} activate
+  exit
+exit
+EOF
+}
+!
+ip prefix-list PL-AS${local.bgp_local_asn}-IN seq 5 permit ${local.ip_cidr_range} le 32
+ip prefix-list PL-AS${local.bgp_local_asn}-OUT seq 5 permit 10.0.0.0/8 le 32
+ip prefix-list PL-AS${local.bgp_local_asn}-OUT seq 10 permit 172.16.0.0/12 le 32
+ip prefix-list PL-AS${local.bgp_local_asn}-OUT seq 15 permit 192.168.0.0/16 le 32
+!
+router bgp ${local.bgp_peer_asn}
+  address-family ipv4 vrf VRF-PRIV
+    neighbor ${local.bgp_local_ip} remote-as ${local.bgp_local_asn}
+    neighbor ${local.bgp_local_ip} description GCP ${local.suffix}
+    neighbor ${local.bgp_local_ip} soft-reconfiguration inbound
+    neighbor ${local.bgp_local_ip} prefix-list PL-AS${local.bgp_local_asn}-IN in
+    neighbor ${local.bgp_local_ip} prefix-list PL-AS${local.bgp_local_asn}-OUT out
+    neighbor ${local.bgp_local_ip} activate
+  exit
+exit
+EOF
+

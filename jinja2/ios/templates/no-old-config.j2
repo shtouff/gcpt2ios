@@ -1,0 +1,12 @@
+router bgp {{ bgp_local_asn }}
+  address-family ipv4 vrf VRF-PRIV
+    no neighbor {{ bgp_local_ip }}
+  exit
+exit
+no ip prefix-list PL-AS{{ bgp_local_asn }}-IN
+no ip prefix-list PL-AS{{ bgp_local_asn }}-OUT
+no interface {{ iface }}
+no crypto ipsec profile ipsec-{{ project_name }}-{{ old_project_id }}-0
+no crypto ipsec transform-set ipsec-prop-{{ project_name }}-{{ old_project_id }}-0
+no crypto isakmp profile isakmp-{{ project_name }}-{{ old_project_id }}-0
+no crypto keyring keyring-{{ project_name }}-{{ old_project_id }}-0
